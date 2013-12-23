@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+  viewBox = "0 0 40 50"
+  width="40" height="50">
+
+ <defs>
+   <clipPath id="topHalf">
+     <rect id="topRect" x="0" y="0" width="40" height="25"/>
+   </clipPath>
+   <clipPath id="bottomHalf">
+     <rect id="bottomRect" x="0" y="25" width="40" height="25"/>
+   </clipPath>
+ </defs>
+ <g style="font-size: 32pt; font-family: sans-serif; fill:white; stroke:none">
+  
+<rect x="0" y="0" width="40" height="50" rx="5" ry="5"
+  style="fill:#303030; stroke:none;"/>
+<text id="letter1"
+  style="text-anchor:middle;"
+    x="20" y="40"> </text>
+<line x1="0" y1="25" x2="40" y2="25"
+  style="stroke: #ccc; fill:none; stroke-width: 2px"/>
+</g>
+</svg>

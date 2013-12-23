@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+
+<!--
+Copyright 2013 J David Eisenberg
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIN, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+-->
+
+<html xml:lang="en" lang="en"
+    xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <title>Spontaneous Travel Helper</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <link rel="stylesheet" href="jquery-ui-1.10.3.custom/css/ui-lightness/jquery-ui-1.10.3.custom.css"/>
+  <link rel="stylesheet" href="data_tables.css"/>
+  <style type="text/css">
+  body {font-family: Helvetica, Arial, sans-serif}
+  .centered {text-align:center}
+  .vcenter {vertical-align: middle}
+  .left {text-align: left}
+  .right {text-align: right}
+
+  #regions ul {list-style-type: none;}
+  
+  .bigButton {
+   display: inline-block;
+   background-color: #009900;
+   color: white;
+   font-size: 18pt;
+   padding: 0.5em;
+   text-align:center;
+   border-radius: 0.5em;
+  }
+  
+  .foldButton {
+    display: inline-block;
+    background-color: #ccc;
+    color: black;
+    border: 1px solid #999;
+    padding: 0.1em;
+    border-radius: 0.2em;
+    cursor: pointer;
+  }
+  
+  a.extlink:after {
+    content: url("external_link.png")
+  }
+  </style>
+  <script src="jquery-ui-1.10.3.custom/js/jquery-1.9.1.js"></script>
+  <script src="jquery-ui-1.10.3.custom/js/jquery-ui-1.10.3.custom.min.js"></script>
+  <script src="jquery.dataTables.min.js"></script>
+  <script type="text/javascript" src="regions.js"></script>
+  <script type="text/javascript" src="cities.js"></script>
+  <script type="text/javascript" src="usa_visa.js"></script>
+  <script type="text/javascript">
+  
+    var regionNames = ["North_America", "Central_America", "South_America",
+      "Europe", "Africa", "Middle_East", "Asia", "South_Asia", "Southeast_Asia",
+      "Oceania"];
+
+    var openRegion = ""; // which region's menu is currently open?
+    
+    var noVisaNeeded = true;
+    var minPopulation = 100000;
+    var maxPopulation = 10000000;
+    var cityCandidates;
+    var chosenCity; // -1 if no city is chosen
+    
+    var worldMapDoc;
+    var worldRef; // reference to "theWorld"in the map
+    var worldMapWidth; // width of world map SVG document
+    var worldMapHeight; // and its height
+    
+    var mapXOffset; // where the map's (0,0) point is now
+    var mapYOffset;
+    
+    /*
+    	How far can the (0, 0) be moved?
+    */
+    var xOffsetLimit;
+    var yOffsetLimit;
+    
+    /*
+    	Repeat mouse movement when mouse is held down over
+    	an arrow button
+    */
+    var arrowInterval;
+    var mapScale;
+
+    var MAX_FLIPBOARD = 20;
+    var currentBoard = new Array(MAX_FLIPBOARD); // current city on "flipboard"
+    var letterDoc = new Array(MAX_FLIPBOARD); // flipboard letter documents
+    var newBoard = new Array(MAX_FLIPBOARD);
+    var finalBoard = new Array(MAX_FLIPBOARD);
+    
+    var showRandom = true; // show random choice or candidate list?
+
+    function startMove(dX, dY)
+    {
+    	if (arrowInterval)
+    	{
+    		clearInterval(arrowInterval);
+    	}
+    	moveMap(dX, dY);
+    	arrowInterval = setInterval('moveMap(' +
+    		dX + ',' + dY + ')', 100);
+    }
+    
+    function moveMap(dX, dY)
+		{
+			mapXOffset = Math.min(
+				Math.max(mapXOffset + dX * 0.1 * xOffsetLimit, xOffsetLimit),
+				0);
+			mapYOffset = Math.min(
+				Math.max(mapYOffset + dY * 0.1 * yOffsetLimit, yOffsetLimit),
+				0);
+			worldRef.setAttribute("x", mapXOffset);
+			worldRef.setAttribute("y", mapYOffset);
+    	console.log("scale=" + mapScale + " xoff = " + mapXOffset + " yoff = " + mapYOffset);
+		}
+		
+    /*
+      Add delta to current scale factor, constrain
+      between 0.5 and 3.0
+      Display current city in new coordinates
+   */
+    function zoom(delta)
+    {
+      var newScale;
+      if (delta == 0)
+      {
+        mapScale = 0.5;
+        mapXOffset = 0;
+        mapYOffset = 0;
+      }
+      else
+      {
+        newScale = mapScale + delta;
+        if (newScale < 0.5)
+        {
+          newScale = 0.5;
+        }
+        else if (newScale > 3.0)
+        {
+          newScale = 3.0;
+        }
+        mapScale = newScale;
+        
+        xOffsetLimit = -(worldMapWidth * (2 * mapScale - 1) / mapScale);
+        yOffsetLimit = -(worldMapHeight * (2 * mapScale - 1) /
+        	mapScale);
+       	/*
+       	xOffsetLimit = -(worldMapWidth * 0.5 / mapScale);
+       	yOffsetLimit = -(worldMapHeight * 0.5 / mapScale);
+       	*/
+        mapXOffset = xOffsetLimit / 2;
+        mapYOffset = yOffsetLimit / 2;
+        mapYMax = worldMapHeight * mapScale;
+      }
+      /*
+      worldRef.setAttribute("transform",
+      	"translate(" + mapXOffset + " " + mapYOffset + ") " +
+      	"scale(" + mapScale + ")"
+      	);
+      */
+      worldRef.setAttribute("transform", "scale(" +
+      	mapScale + ")");
+      worldRef.setAttribute("x", mapXOffset);
+      worldRef.setAttribute("y", mapYOffset);
+      showCityLocation(chosenCity);
+    }
+    
+    /*
+      Set the color of a country in the SVG map.
+      Parameter code is the two-letter country code.
+      Disabled ("needs visa") countries are gray;
+      unchecked countries are yellow,
+      checked countries are green.
+    */
+    function setColor(code)
+    {
+      var svgObj = worldMapDoc.getElementById("g" + code);
+      var cbox = document.getElementById(code);
+      var color="#fefee9";
+      if (cbox)
+      {
+        if (cbox.disabled)
+        {
+          color = "#cccccc";
+        }
+        else if (cbox.checked)
+        {
+          color = "#ccffcc";
+        }
+      }
+      if (svgObj)
+      {
+        svgObj.setAttribute("fill", color);
+      }
+    }
+    
+    /*
+      This function is called whenever a country's
+      checkbox is clicked. It sets the map color for
+      the country, and also re-creates the list of
+      candidate cities.
+    */
+    function clickedBox()
+    {
+      setColor($(this).attr('value'));
+      findCandidateCities();
+    }
+    
+    /*
+      Called whenever a button next to a continent
+      name is called. Closes the current submenu
+      and opens the new one, if different from the
+      current one.
+    */
+    function foldMenu()
+    {
+      var sublist = $(this).siblings("ul");
+      var chosenRegion = sublist.attr("id");
+      
+      // close previously open region
+      if (openRegion != "")
+      {
+        $("#" + openRegion).css("display", "none");
+        $("#" + openRegion).parent().children("span").html("&nbsp;+&nbsp;");
+      }
+      // if it's not the same region, open chosen region
+      if (openRegion != chosenRegion)
+      {
+        sublist.css("display", "block");
+        $(this).html("&nbsp;&#8211;&nbsp;");
+      }
+      openRegion = (openRegion != chosenRegion) ? chosenRegion : "";  
+    }
+    
+    /*
+      The map is not drawn with the prime meridian at the
+      exact horizontal center, so I have to add 525 instead of
+      the worldMapWidth / 2
+    */
+    function showCityLocation(cityIndex)
+    {
+      var x;
+      var y;
+      var r;
+      var obj = worldMapDoc.getElementById("youAreHere");
+
+      if (cityIndex > -1)
+      {
+        var info = cityCandidates[cityIndex];      
+        x = (525 + worldMapWidth * (info[4] / 180));
+        y = (worldMapHeight - worldMapHeight * (info[3] / 90));
+        r = 6 / (mapScale / 0.5);
+      }
+      else
+      {
+        x = -10000;
+        y = -10000;
+        r = 6;
+      }
+      obj.setAttribute("cx", x);
+      obj.setAttribute("cy", y);
+      obj.setAttribute("r", r);
+    }
+
+    /*
+      Uses status of the "No Visa Needed" checkbox.
+      If the box is checked, disable all countries which *do* need a visa.
+      If the box is unchecked, all countries are available.
+    */
+    function setVisa()
+    {
+      var checklist = $("#regions ul ul input[type='checkbox']")
+      checklist.each( function(index) {
+        $(this).prop("disabled", noVisaNeeded)
+        setColor($(this).attr('value'))
+      })
+      if (noVisaNeeded)
+      {
+        for (var i = 0; i < visa.length; i++)
+        {
+          $("input[value='" + visa[i] + "']").prop("disabled", false);
+          setColor(visa[i]);
+        }
+      }
+    }
+    
+    /*
+      Function that is called when the "No Visa Needed" box is clicked;
+      sets global variable noVisaNeeded.
+    */
+    function toggleVisa()
+    {
+      noVisaNeeded = document.getElementById("noVisaBox").checked;
+      setVisa();
+      findCandidateCities();
+    }
+    
+    /*
+      Given a region (Europe, Asia, etc) and a boolean,
+      checks or unchecks all the boxes for the countries
+      in that region.
+    */
+    function setAll(region, whichWay)
+    {
+      var checklist = $("#" + region + " :checkbox");
+      var value;
+      var color;
+      checklist.prop("checked", whichWay);
+      checklist.each( function(index) {
+        value = $(this).attr("value");
+        setColor(value);
+      });
+    }
+    
+    /*
+      Find all cities matching the criteria.
+      Add their country codes, city name, population,
+      latitude and longitude.
+    */
+    function findCandidateCities()
+    {
+      var checklist = $("#regions ul ul :checkbox");
+      var sublist;
+      var color;
+      var min = (minPopulation == 100000) ? 0 : minPopulation;
+      var max = (maxPopulation == 10000000) ? 90000000 : maxPopulation
+      cityCandidates = [];
+      checklist.each( function(index) {
+        if (!($(this).prop('disabled')) && $(this).prop('checked'))
+        {
+          sublist = cities[$(this).attr("value")];
+          if (!sublist)
+          {
+            alert($(this).attr("value"));
+          }
+          else
+          {
+          for (var i = 0; i < sublist.length; i++)
+          {
+            if (sublist[i][1] >= min && sublist[i][1] <= max)
+            {
+              cityCandidates.push([sublist[i][0], $(this).attr('value'), sublist[i][1],
+                sublist[i][2], sublist[i][3]]);
+            }
+          }
+          }
+        }
+      });
+      $("#cityCount").text(cityCandidates.length);
+      
+      if (showRandom)
+      {
+        color = (cityCandidates.length == 0) ? "#666666" : "#009900";
+        $("#selectButton").css("backgroundColor", color);
+      }
+      else
+      {
+        constructCityTable();
+      }
+    }
+    
+    /*
+    Construct the <tbody> in the listDiv table
+    */
+    function constructCityTable()
+    {
+      var oTable = $('#cityListTable').dataTable();
+      oTable.fnClearTable();
+      oTable.fnAddData(cityCandidates);      
+    }
+    
+    /*
+      Since the population slider goes from 100K to 10M,
+      I made it logarithmic; the further up the slider
+      you go, the larger the steps.
+    */
+    function logScale(n)
+    {
+      var result = Math.pow(10, n / 100);
+      result = 10000 * Math.floor(result / 10000)
+      return result;
+    }
+    
+    /*
+      Prints a number with commas every three digits
+    */
+    function insertCommas(result)
+    {
+      return result.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+    
+    /*
+      Utility routine for the flipboard; goes to the "next character"
+      in line. Z wraps around to blank, and blank proceeds to A.
+    */
+    function charIncr(ch)
+    {
+      if (ch == " ")
+      {
+        ch = "A";
+      }
+      else if (ch == "Z")
+      {
+        ch = " ";
+      }
+      else
+      {
+        ch = String.fromCharCode(ch.charCodeAt(0) + 1);
+      }
+      return ch;
+    }
+    
+    /*
+      Set up the flipboard for the chosen city.
+      str contains the city name, which I then:
+      * rid of anything in parentheses after the city name
+      * Convert to upper case, and center it in a string of length 20.
+      
+      Since the flipboard only "knows" about A-Z as it is incrementing
+      characters, I also create uStr, which is the same as str, but without
+      any of the accented characters or punctuation marks.
+      
+      Then I create newBoard, an array with one character of the
+      unaccented string per element, and finalBoard, an array with one
+      character of the accented string per element.
+    */
+    function flipBoard(cityIndex)
+    {
+      var uStr;
+      var str = cityCandidates[cityIndex][0];
+      $("#destination").text("\u00a0");
+      
+      str = str.replace(/\s+\(.*\)$/, "");
+      
+      // if length is > 20, get rid of the middle part
+      if (str.length > MAX_FLIPBOARD)
+      {
+        str = str.substr(0, 9) + "..." +
+          str.substr(str.length - 8, 8);
+      }
+      str = str.toUpperCase();
+
+      // center inside a string of 20 blanks.
+      if (str.length < MAX_FLIPBOARD)
+      {
+        str = "            ".substr(0, (MAX_FLIPBOARD - Math.floor(str.length)) / 2) +
+          str + "            ".substr(0, (MAX_FLIPBOARD - Math.floor(str.length)) / 2);
+        if (str.length != MAX_FLIPBOARD)
+        {
+          str += " ";
+        }
+      }
+      
+      // now get an unaccented version
+      uStr = unaccentedUpperCase(str);
+      uStr = uStr.replace(/[^A-Z]/g, " ");
+      
+      for (var i = 0; i < newBoard.length; i++)
+      {
+        newBoard[i] = uStr.charAt(i);
+        finalBoard[i] = str.charAt(i);
+      }      
+      window.setTimeout("doFlip(" + cityIndex + ")", 100);
+    }
+    
+    /*
+      Increment the characters stored in currentBoard[] until
+      they equal the characters stored in newBoard[] (unaccented);
+      When at the right place, display the accented character from
+      finalBoard[]
+    */
+    function doFlip(cityIndex)
+    {
+      var nChanges = 0;
+      var info = cityCandidates[cityIndex];
+      for (var i = 0; i < newBoard.length; i++)
+      {
+        if (newBoard[i] != currentBoard[i])
+        {
+          currentBoard[i] = charIncr(currentBoard[i]);
+          displayLetter(i, currentBoard[i]);
+          nChanges++
+        }
+        else
+        {
+          displayLetter(i, finalBoard[i]);
+        }
+      }
+      
+      // If there were any changes, you aren't there yet.
+      if (nChanges != 0)
+      {
+        window.setTimeout("doFlip(" + cityIndex + ")", 100);
+      }
+      else // reveal the information in an easy-to-read form
+      {
+        $("#destination").html("Your destination is " + info[0] + ", " +
+          countryNames[info[1]] +
+         " (population " + insertCommas(info[2]) + ")."  +
+         " <small><a class=\"extlink\" href=\"http://en.wikipedia.org/wiki/" +
+         wikify(info[0], info[1]) +
+         "\">Search Wikipedia</a></small>");
+        showCityLocation(cityIndex);
+      }
+    }
+    
+    function wikify(city, countryCode)
+    {
+      var result;
+      if (countryCode == "US")
+      {
+        result = city.replace(/\s+\(([A-Z]+)\).*/g, ",_$1");
+      }
+      else
+      {
+        result = city.replace(/\s/g,"_")  + ",_" +
+          countryNames[countryCode].replace(/\s/g, "_");
+      }
+      return result;
+    }
+    
+    /*
+      Displays the letter in the SVG letter tile
+    */
+    function displayLetter(n, ch)
+    {
+      var obj = letterDoc[n].getElementById("letter1");
+      var txt = letterDoc[n].createTextNode(ch);
+      obj.replaceChild(txt, obj.firstChild);
+    }
+    
+    /*
+      Convert characters in the range U+00C0-U+0180
+      to the range A-Z
+    */
+    function unaccentedUpperCase(str)
+    {
+      var result = "";
+      var plain = "AAAAAAACEEEEIIIIDOOOOO OUUUUYPS" +
+      "AAAAAAACEEEEIIIIDOOOOO OUUUUYPY" +
+      "AAAAAACCCCCCCCDDDDEEEEEEEEEEGGGG" +
+      "GGGGHHHHIIIIIIIIIIIIJJKKKLLLLLLL" +
+      "LLLNNNNNNNNNOOOOOOOORRRRRRSSSSSS" +
+      "SSTTTTTTUUUUUUUUUUUUWWYYYZZZZZZS";
+      str = str.toUpperCase();
+      for (var i = 0; i < str.length; i++)
+      {
+        c = str.charCodeAt(i);
+        if (c >= 0xc0 && c < 0x180)
+        {
+          result += plain.charAt(c - 0xc0);
+        }
+        else
+        {
+          result += str.charAt(i);
+        }
+      }
+      return result;
+    }
+    
+    /*
+      Called when you click the "Select Destination" button;
+      chooses an index and starts the flipboard.
+    */
+    function makeChoice()
+    {
+      chosenCity = Math.floor(Math.random() * cityCandidates.length);
+      flipBoard(chosenCity);
+    }
+    
+    
+    function allRegions(whichWay)
+    {
+      for (var i = 0; i < regionNames.length; i++)
+      {
+        setAll(regionNames[i], whichWay);
+        $("#" + regionNames[i]).parent().children(":checkbox").
+          prop("checked", whichWay);
+      }
+      findCandidateCities();
+    }
+    
+    /*
+      Switch between the "Select Random Destination"
+      and list of candidate cities.
+    */
+    function displayRandom(whichWay)
+    {
+      if (whichWay)
+      {
+        $("#randomDiv").css("display", "block");
+        $("#listDiv").css("display", "none");
+      }
+      else
+      {
+        $("#randomDiv").css("display", "none");
+        $("#listDiv").css("display", "block");
+        constructCityTable();
+      }
+      showRandom = whichWay;
+    }
+    
+    function initialize()
+    {
+      $("#population").slider({
+        range: true,
+        min: 500,
+        max: 700,
+        values: [ 500, 700 ],
+        step: 10,
+        slide: function( event, ui ) {
+          minPopulation = logScale(ui.values[0]);
+          maxPopulation = logScale(ui.values[1]);
+          $("#minpop").text(insertCommas(minPopulation))
+          $("#maxpop").text(insertCommas(maxPopulation))
+        },
+        change: function(event, ui) { findCandidateCities() }
+      });
+      
+      $("#regions ul ul input[type='checkbox']").bind("click", clickedBox)
+      $("#regions .foldButton").bind("click", foldMenu);
+      
+      worldMapDoc = document.getElementById("worldMap").getSVGDocument();
+     
+      worldMapHeight = parseFloat(worldMapDoc.getElementById("svg8015").
+        getAttribute("height"));
+      worldMapWidth = parseFloat(worldMapDoc.getElementById("svg8015").
+        getAttribute("width"));
+      worldRef = worldMapDoc.getElementById("worldRef");
+      mapXOffset = 0;
+      mapYOffset = 0;
+      xOffsetLimit = 0;
+      yOffsetLimt = 0;
+      mapScale = 0.5;
+
+     
+      /*
+        Select all regions, with "no visa needed" countries only
+      */
+      $("#regions input[class='region']").prop("checked", true);
+      for (var i = 0; i < regionNames.length; i++)
+      {
+        setAll(regionNames[i], true);
+      }
+      setVisa();  
+      findCandidateCities();
+      chosenCity = -1;
+      
+      /*
+        Get access to all the SVG flipboard tiles, and
+        set the current board to all spaces.
+      */
+      for (var i = 0; i < letterDoc.length; i++)
+      {
+        letterDoc[i] = document.getElementById("l" + i).getSVGDocument();
+        currentBoard[i] = " ";
+      }
+      
+      $("#cityListTable").dataTable( 
+          {
+          "sScrollY": "200px",
+          "bPaginate": false,
+          "bFilter": false,
+          "bAutoWidth": false,
+          "aoColumnDefs": [
+            {
+              "aTargets": [0],
+              "sWidth": "300px",
+              "sClass": "left"
+
+            },
+            { "aTargets": [1],
+              "mRender": function(data, type, row) {
+                return countryNames[data];
+              },
+              "sWidth": "150px",
+              "sClass": "left"
+            },
+            { "aTargets": [2],
+              "mRender": function(data, type, row) {
+                return insertCommas(data);
+              },
+              "sWidth": "60px",
+              "sClass": "right"
+            }
+          ]
+          }
+        );
+      $("#randomRadio").prop("checked", true);
+      $("#listDiv").css("display", "none");
+    }
+  </script>  
+</head>
+
+<body onload="initialize()">
+<div style="float:left; width: 40%">
+<div id="regions" style="height:400px; overflow: scroll">
+<ul>
+  <li><span class="foldButton">&nbsp;+&nbsp;</span> <input type="checkbox"
+    onclick="setAll('North_America', this.checked); findCandidateCities();"
+    checked="checked" class="region" /> North America
+  <ul class="sublist" style="display: none" id="North_America">
+    <li><input type="checkbox" value="BS" id="BS" /> Bahamas</li>
+    <li><input type="checkbox" value="CA" id="CA" /> Canada</li>
+    <li><input type="checkbox" value="CU" id="CU" /> Cuba</li>
+    <li><input type="checkbox" value="DO" id="DO" /> Dominican Republic</li>
+    <li><input type="checkbox" value="HT" id="HT" /> Haiti</li>
+    <li><input type="checkbox" value="JM" id="JM" /> Jamaica</li>
+    <li><input type="checkbox" value="MX" id="MX" /> Mexico</li>
+    <li><input type="checkbox" value="PR" id="PR" /> Puerto Rico</li>
+    <li><input type="checkbox" value="TT" id="TT" /> Trinidad and Tobago</li>
+    <li><input type="checkbox" value="US" id="US" /> United States of America</li>
+  </ul>
+  </li>
+
+  <li><span class="foldButton">&nbsp;+&nbsp;</span> <input type="checkbox"
+    onclick="setAll('Central_America', this.checked); findCandidateCities();"
+    checked="checked" class="region" /> Central America
+  <ul class="sublist" style="display: none" id="Central_America">
+    <li><input type="checkbox" value="CR" id="CR" /> Costa Rica</li>
+    <li><input type="checkbox" value="SV" id="SV" /> El Salvador</li>
+    <li><input type="checkbox" value="GT" id="GT" /> Guatemala</li>
+    <li><input type="checkbox" value="HN" id="HN" /> Honduras</li>
+    <li><input type="checkbox" value="NI" id="NI" /> Nicaragua</li>
+    <li><input type="checkbox" value="PA" id="PA" /> Panama</li>
+  </ul>
+  </li>
+
+  <li><span class="foldButton">&nbsp;+&nbsp;</span> <input type="checkbox"
+    onclick="setAll('South_America', this.checked); findCandidateCities();"
+    checked="checked" class="region" /> South America
+  <ul class="sublist" style="display: none" id="South_America">
+    <li><input type="checkbox" value="AR" id="AR" /> Argentina</li>
+    <li><input type="checkbox" value="BO" id="BO" /> Bolivia</li>
+    <li><input type="checkbox" value="BR" id="BR" /> Brazil</li>
+    <li><input type="checkbox" value="CL" id="CL" /> Chile</li>
+    <li><input type="checkbox" value="CO" id="CO" /> Colombia</li>
+    <li><input type="checkbox" value="EC" id="EC" /> Ecuador</li>
+    <li><input type="checkbox" value="GY" id="GY" /> Guyana</li>
+    <li><input type="checkbox" value="PY" id="PY" /> Paraguay</li>
+    <li><input type="checkbox" value="PE" id="PE" /> Peru</li>
+    <li><input type="checkbox" value="SR" id="SR" /> Suriname</li>
+    <li><input type="checkbox" value="UY" id="UY" /> Uruguay</li>
+    <li><input type="checkbox" value="VE" id="VE" /> Venezuela</li>
+  </ul>
+  </li>
+
+  <li><span class="foldButton">&nbsp;+&nbsp;</span> <input type="checkbox"
+    onclick="setAll('Europe', this.checked); findCandidateCities();"
+    checked="checked" class="region" /> Europe
+  <ul class="sublist" style="display: none" id="Europe">
+    <li><input type="checkbox" value="AL" id="AL" /> Albania</li>
+    <li><input type="checkbox" value="AT" id="AT" /> Austria</li>
+    <li><input type="checkbox" value="BY" id="BY" /> Belarus</li>
+    <li><input type="checkbox" value="BE" id="BE" /> Belgium</li>
+    <li><input type="checkbox" value="BG" id="BG" /> Bulgaria</li>
+    <li><input type="checkbox" value="HR" id="HR" /> Croatia</li>
+    <li><input type="checkbox" value="CZ" id="CZ" /> Czech Republic</li>
+    <li><input type="checkbox" value="DK" id="DK" /> Denmark</li>
+    <li><input type="checkbox" value="EE" id="EE" /> Estonia</li>
+    <li><input type="checkbox" value="FI" id="FI" /> Finland</li>
+    <li><input type="checkbox" value="FR" id="FR" /> France</li>
+    <li><input type="checkbox" value="DE" id="DE" /> Germany</li>
+    <li><input type="checkbox" value="GR" id="GR" /> Greece</li>
+    <li><input type="checkbox" value="HU" id="HU" /> Hungary</li>
+    <li><input type="checkbox" value="IS" id="IS" /> Iceland</li>
+    <li><input type="checkbox" value="IE" id="IE" /> Ireland</li>
+    <li><input type="checkbox" value="IT" id="IT" /> Italy</li>
+    <li><input type="checkbox" value="LV" id="LV" /> Latvia</li>
+    <li><input type="checkbox" value="LT" id="LT" /> Lithuania</li>
+    <li><input type="checkbox" value="ME" id="ME" /> Montenegro</li>
+    <li><input type="checkbox" value="NL" id="NL" /> Netherlands</li>
+    <li><input type="checkbox" value="NO" id="NO" /> Norway</li>
+    <li><input type="checkbox" value="PL" id="PL" /> Poland</li>
+    <li><input type="checkbox" value="PT" id="PT" /> Portugal</li>
+    <li><input type="checkbox" value="MD" id="MD" /> Moldova</li>
+    <li><input type="checkbox" value="RO" id="RO" /> Romania</li>
+    <li><input type="checkbox" value="RU" id="RU" /> Russian Federation</li>
+    <li><input type="checkbox" value="RS" id="RS" /> Serbia</li>
+    <li><input type="checkbox" value="SK" id="SK" /> Slovakia</li>
+    <li><input type="checkbox" value="SI" id="SI" /> Slovenia</li>
+    <li><input type="checkbox" value="ES" id="ES" /> Spain</li>
+    <li><input type="checkbox" value="SE" id="SE" /> Sweden</li>
+    <li><input type="checkbox" value="CH" id="CH" /> Switzerland</li>
+    <li><input type="checkbox" value="MK" id="MK" /> Macedonia</li>
+    <li><input type="checkbox" value="UA" id="UA" /> Ukraine</li>
+    <li><input type="checkbox" value="GB" id="GB" /> United Kingdom</li>
+  </ul>
+  </li>
+
+  <li><span class="foldButton">&nbsp;+&nbsp;</span> <input type="checkbox"
+    onclick="setAll('Africa', this.checked); findCandidateCities();"
+    checked="checked"  class="region" /> Africa
+  <ul class="sublist" style="display: none" id="Africa">
+    <li><input type="checkbox" value="DZ" id="DZ" /> Algeria</li>
+    <li><input type="checkbox" value="AO" id="AO" /> Angola</li>
+    <li><input type="checkbox" value="BJ" id="BJ" /> Benin</li>
+    <li><input type="checkbox" value="BW" id="BW" /> Botswana</li>
+    <li><input type="checkbox" value="BF" id="BF" /> Burkina Faso</li>
+    <li><input type="checkbox" value="BI" id="BI" /> Burundi</li>
+    <li><input type="checkbox" value="CM" id="CM" /> Cameroon</li>
+    <li><input type="checkbox" value="CV" id="CV" /> Cape Verde</li>
+    <li><input type="checkbox" value="TD" id="TD" /> Chad</li>
+    <li><input type="checkbox" value="DJ" id="DJ" /> Djibouti</li>
+    <li><input type="checkbox" value="ET" id="ET" /> Ethiopia</li>
+    <li><input type="checkbox" value="GA" id="GA" /> Gabon</li>
+    <li><input type="checkbox" value="GH" id="GH" /> Ghana</li>
+    <li><input type="checkbox" value="GN" id="GN" /> Guinea</li>
+    <li><input type="checkbox" value="KE" id="KE" /> Kenya</li>
+    <li><input type="checkbox" value="MG" id="MG" /> Madagascar</li>
+    <li><input type="checkbox" value="MW" id="MW" /> Malawi</li>
+    <li><input type="checkbox" value="MR" id="MR" /> Mauritania</li>
+    <li><input type="checkbox" value="MU" id="MU" /> Mauritius</li>
+    <li><input type="checkbox" value="MA" id="MA" /> Morocco</li>
+    <li><input type="checkbox" value="MZ" id="MZ" /> Mozambique</li>
+    <li><input type="checkbox" value="NA" id="NA" /> Namibia</li>
+    <li><input type="checkbox" value="NE" id="NE" /> Niger</li>
+    <li><input type="checkbox" value="RE" id="RE" /> Réunion</li>
+    <li><input type="checkbox" value="RW" id="RW" /> Rwanda</li>
+    <li><input type="checkbox" value="SN" id="SN" /> Senegal</li>
+    <li><input type="checkbox" value="SL" id="SL" /> Sierra Leone</li>
+    <li><input type="checkbox" value="SO" id="SO" /> Somalia</li>
+    <li><input type="checkbox" value="ZA" id="ZA" /> South Africa</li>
+    <li><input type="checkbox" value="TN" id="TN" /> Tunisia</li>
+    <li><input type="checkbox" value="UG" id="UG" /> Uganda</li>
+    <li><input type="checkbox" value="EH" id="EH" /> Western Sahara</li>
+    <li><input type="checkbox" value="ZM" id="ZM" /> Zambia</li>
+    <li><input type="checkbox" value="ZW" id="ZW" /> Zimbabwe</li>
+  </ul>
+  </li>
+
+  <li><span class="foldButton">&nbsp;+&nbsp;</span> <input type="checkbox"
+    onclick="setAll('Middle_East', this.checked); findCandidateCities();"
+    checked="checked" class="region" /> Middle East
+  <ul class="sublist" style="display: none" id="Middle_East">
+    <li><input type="checkbox" value="BH" id="BH" /> Bahrain</li>
+    <li><input type="checkbox" value="CY" id="CY" /> Cyprus</li>
+    <li><input type="checkbox" value="EG" id="EG" /> Egypt</li>
+    <li><input type="checkbox" value="IR" id="IR" /> Iran</li>
+    <li><input type="checkbox" value="IL" id="IL" /> Israel</li>
+    <li><input type="checkbox" value="JO" id="JO" /> Jordan</li>
+    <li><input type="checkbox" value="KW" id="KW" /> Kuwait</li>
+    <li><input type="checkbox" value="LB" id="LB" /> Lebanon</li>
+    <li><input type="checkbox" value="OM" id="OM" /> Oman</li>
+    <li><input type="checkbox" value="PS" id="PS" /> Palestine</li>
+    <li><input type="checkbox" value="QA" id="QA" /> Qatar</li>
+    <li><input type="checkbox" value="SA" id="SA" /> Saudi Arabia</li>
+    <li><input type="checkbox" value="SY" id="SY" /> Syria</li>
+    <li><input type="checkbox" value="TR" id="TR" /> Turkey</li>
+    <li><input type="checkbox" value="AE" id="AE" /> United Arab Emirates</li>
+    <li><input type="checkbox" value="YE" id="YE" /> Yemen</li>
+  </ul>
+  </li>
+
+  <li><span class="foldButton">&nbsp;+&nbsp;</span> <input type="checkbox"
+    onclick="setAll('Asia', this.checked); findCandidateCities();"
+    checked="checked" class="region" /> Asia
+  <ul class="sublist" style="display: none" id="Asia">
+    <li><input type="checkbox" value="AM" id="AM" /> Armenia</li>
+    <li><input type="checkbox" value="AZ" id="AZ" /> Azerbaijan</li>
+    <li><input type="checkbox" value="CN" id="CN" /> China</li>
+    <li><input type="checkbox" value="HK" id="HK" /> Hong Kong</li>
+    <li><input type="checkbox" value="MO" id="MO" /> Macao</li>
+    <li><input type="checkbox" value="KP" id="KP" /> North Korea</li>
+    <li><input type="checkbox" value="GE" id="GE" /> Georgia</li>
+    <li><input type="checkbox" value="JP" id="JP" /> Japan</li>
+    <li><input type="checkbox" value="KZ" id="KZ" /> Kazakhstan</li>
+    <li><input type="checkbox" value="KG" id="KG" /> Kyrgyzstan</li>
+    <li><input type="checkbox" value="MN" id="MN" /> Mongolia</li>
+    <li><input type="checkbox" value="KR" id="KR" /> South Korea</li>
+    <li><input type="checkbox" value="TJ" id="TJ" /> Tajikistan</li>
+    <li><input type="checkbox" value="TW" id="TW" /> Taiwan</li>
+    <li><input type="checkbox" value="UZ" id="UZ" /> Uzbekistan</li>
+  </ul>
+  </li>
+
+  <li><span class="foldButton">&nbsp;+&nbsp;</span> <input type="checkbox"
+    onclick="setAll('South_Asia', this.checked); findCandidateCities();"
+    checked="checked" class="region" /> South Asia
+  <ul class="sublist" style="display: none" id="South_Asia">
+    <li><input type="checkbox" value="AF" id="AF" /> Afghanistan</li>
+    <li><input type="checkbox" value="BD" id="BD" /> Bangladesh</li>
+    <li><input type="checkbox" value="IN" id="IN" /> India</li>
+    <li><input type="checkbox" value="MV" id="MV" /> Maldives</li>
+    <li><input type="checkbox" value="NP" id="NP" /> Nepal</li>
+    <li><input type="checkbox" value="PK" id="PK" /> Pakistan</li>
+    <li><input type="checkbox" value="LK" id="LK" /> Sri Lanka</li>
+  </ul>
+  </li>
+
+  <li><span class="foldButton">&nbsp;+&nbsp;</span> <input type="checkbox"
+    onclick="setAll('Southeast_Asia', this.checked); findCandidateCities();"
+    checked="checked" class="region" /> Southeast Asia
+  <ul class="sublist" style="display: none" id="Southeast_Asia">
+    <li><input type="checkbox" value="KH" id="KH" /> Cambodia</li>
+    <li><input type="checkbox" value="TL" id="TL" /> East Timor</li>
+    <li><input type="checkbox" value="ID" id="ID" /> Indonesia</li>
+    <li><input type="checkbox" value="LA" id="LA" /> Laos</li>
+    <li><input type="checkbox" value="MY" id="MY" /> Malaysia</li>
+    <li><input type="checkbox" value="PH" id="PH" /> Philippines</li>
+    <li><input type="checkbox" value="SG" id="SG" /> Singapore</li>
+    <li><input type="checkbox" value="TH" id="TH" /> Thailand</li>
+    <li><input type="checkbox" value="VN" id="VN" /> Viet Nam</li>
+  </ul>
+  </li>
+
+  <li><span class="foldButton">&nbsp;+&nbsp;</span> <input type="checkbox"
+    onclick="setAll('Oceania', this.checked); findCandidateCities();"
+    checked="checked" class="region" /> Oceania
+  <ul class="sublist" style="display: none" id="Oceania">
+    <li><input type="checkbox" value="AU" id="AU" /> Australia</li>
+    <li><input type="checkbox" value="NZ" id="NZ" /> New Zealand</li>
+    <li><input type="checkbox" value="PG" id="PG" /> Papua New Guinea</li>
+  </ul>
+  </li>
+
+</ul>
+
+</div> <!-- regions -->
+<p style="text-align: center">
+  <input type="checkbox" id="noVisaBox" checked="checked"
+    onclick="toggleVisa()"/> No visa needed
+  <input type="button" onclick="allRegions(true)" value="Select All Regions"/>
+  <input type="button" onclick="allRegions(false)" value="Select No Regions"/>
+</p>
+</div> <!-- floating -->
+
+<div style="float:right; width:560px; padding: 0 0 0 0.5em">
+		<object id="worldMap" data="world_map.svg" type="image/svg+xml"
+		width="551" height="277">
+  </object>
+  <p class="centered">
+    <img src="zoom-out.png" width="24" height="24" alt="Zoom out"
+    	title="Zoom out" class="vcenter"
+      onclick="zoom(-0.25)"/>
+    <img src="no-zoom.png" width="24" height="24" alt="Normal size" title="Normal size"  class="vcenter"
+      onclick="zoom(0)"/>
+    <img src="zoom-in.png" width="24" height="24" alt="Zoom in" title="Zoom in"  class="vcenter"
+      onclick="zoom(0.25)"/>
+    &nbsp; &nbsp;
+    <img src="arrows.png" width="80" height="65" alt="Arrows"
+    	usemap="#arrowMap"  class="vcenter"/>
+  </p>
+  <p class="centered">Number of cities: <span id="cityCount">0</span></p>
+  <div id="population"></div>
+  <p class="centered">Desired population: From <span id="minpop">100,000</span> to <span id="maxpop">10,000,000</span></p>
+</div>
+
+<div style="clear:both" class="centered"> <!-- bottom half of page -->
+<p>
+<input type="radio" id="randomRadio" name="resultType" onclick="displayRandom(true)"
+  checked="checked" /> Random destination
+<input type="radio" id="listRadio" name="resultType" onclick="displayRandom(false)" /> Show city names
+</p>
+<div id="randomDiv" style="display:block">
+<p>
+<input class="bigButton" type="button" onclick="makeChoice()" value="Select a Destination"
+  id="selectButton"/>
+</p>
+
+<p>
+<object id="l0" data="letterbox.svg" type="image/svg+xml" width="40px" height="50px"/></object>
+<object id="l1" data="letterbox.svg" type="image/svg+xml" width="40" height="50"/></object>
+<object id="l2" data="letterbox.svg" type="image/svg+xml" width="40" height="50"/></object>
+<object id="l3" data="letterbox.svg" type="image/svg+xml" width="40" height="50"/></object>
+<object id="l4" data="letterbox.svg" type="image/svg+xml" width="40" height="50"/></object>
+<object id="l5" data="letterbox.svg" type="image/svg+xml" width="40" height="50"/></object>
+<object id="l6" data="letterbox.svg" type="image/svg+xml" width="40" height="50"/></object>
+<object id="l7" data="letterbox.svg" type="image/svg+xml" width="40" height="50"/></object>
+<object id="l8" data="letterbox.svg" type="image/svg+xml" width="40" height="50"/></object>
+<object id="l9" data="letterbox.svg" type="image/svg+xml" width="40" height="50"/></object>
+<object id="l10" data="letterbox.svg" type="image/svg+xml" width="40px" height="50px"/></object>
+<object id="l11" data="letterbox.svg" type="image/svg+xml" width="40" height="50"/></object>
+<object id="l12" data="letterbox.svg" type="image/svg+xml" width="40" height="50"/></object>
+<object id="l13" data="letterbox.svg" type="image/svg+xml" width="40" height="50"/></object>
+<object id="l14" data="letterbox.svg" type="image/svg+xml" width="40" height="50"/></object>
+<object id="l15" data="letterbox.svg" type="image/svg+xml" width="40" height="50"/></object>
+<object id="l16" data="letterbox.svg" type="image/svg+xml" width="40" height="50"/></object>
+<object id="l17" data="letterbox.svg" type="image/svg+xml" width="40" height="50"/></object>
+<object id="l18" data="letterbox.svg" type="image/svg+xml" width="40" height="50"/></object>
+<object id="l19" data="letterbox.svg" type="image/svg+xml" width="40" height="50"/></object>
+</p>
+
+<p>
+<span id="destination">&nbsp;</span>
+</p>
+</div>
+
+<div id="listDiv">
+<table class="display" id="cityListTable"> <!--  style="margin: 0 auto" -->
+<thead>
+	<tr>
+	<th>City</th>
+  <th>Country</th>
+  <th>Population</th>
+	</tr>
+</thead>
+<tbody id="listBody">
+</tbody>
+</table>
+</div>
+
+<div style="clear:both">
+<hr />
+<p class="centered">
+<a href="about.html">About this page / Credits</a>
+</p>
+</div>
+
+<map name="arrowMap">
+<!-- #$-:Image map file created by GIMP Image Map plug-in -->
+<!-- #$-:GIMP Image Map plug-in by Maurits Rijk -->
+<!-- #$-:Please do not edit lines starting with "#$" -->
+<!-- #$VERSION:2.3 -->
+<!-- #$AUTHOR:J David Eisenberg -->
+<area shape="circle" coords="39,13,14" alt="up" title="Up"
+	href="#"
+	onmousedown="startMove(0, -1)"	onmouseup="clearInterval(arrowInterval)"/>
+<area shape="circle" coords="65,32,13" alt="Right" title="Right" 
+	href="#"
+	onmousedown="startMove(1,0)"
+	onmouseup="clearInterval(arrowInterval)"/>
+<area shape="circle" coords="39,51,15" alt="Down" title="Down"
+	href="#"
+	onmousedown="startMove(0,1)"
+	onmouseup="clearInterval(arrowInterval)" />
+<area shape="circle" coords="13,32,15" alt="Left" title="Left"
+	href="#"
+	onmousedown="startMove(-1,0)"
+	onmouseup="clearInterval(arrowInterval)"/>
+</map>
+
+</body>
+</html>

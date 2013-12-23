@@ -1,0 +1,75 @@
+<html>
+<head>
+<title>Test</title>
+<script type="text/javascript">
+var scaleFactor = 0.5;
+var worldMapDoc;
+var worldRef;
+var mapX;
+var mapY;
+
+function init()
+{
+	worldMapDoc = document.getElementById("worldMap").getSVGDocument();
+	worldRef = worldMapDoc.getElementById("worldRef");
+	mapX = 0;
+	mapY = 0;
+}
+
+function zoom(delta)
+{
+	var newFactor = scaleFactor + delta;
+	if (newFactor >= 0.5 && newFactor <= 2.0)
+	{
+		scaleFactor = newFactor;
+		worldRef.setAttribute("transform", "scale(" + newFactor + ")");
+	}
+}
+
+function moveMap(dX, dY)
+{
+	worldRef.setAttribute("x", mapX + dX);
+	worldRef.setAttribute("y", mapY + dY);
+	mapX += dX;
+	mapY += dY;
+}
+
+function test()
+{
+	worldRef.setAttribute("x", document.getElementById('testX').value);
+	worldRef.setAttribute("y",  document.getElementById('testY').value);
+	worldRef.setAttribute("transform", "scale(" +
+		document.getElementById('scale').value + ")");
+}
+
+function untest()
+{
+	worldRef.setAttribute("x", "0");
+	worldRef.setAttribute("y", "0");
+	worldRef.setAttribute("transform", "scale(0.5)");
+}
+</script>
+</head>
+<body onload="init()">
+<div>
+ <object id="worldMap" data="world_test.svg" type="image/svg+xml"
+            width="551" height="277">
+  </object>
+</div>
+<p>
+<input type="button" value="+" onclick="zoom(0.25)"/>
+<input type="button" value="-" onclick="zoom(-0.25)"/>
+<input type="button" value="&lt;-" onclick="moveMap(-5, 0)"/>
+<input type="button" value="-&gt;" onclick="moveMap(5, 0)"/>
+<input type="button" value="^" onclick="moveMap(0, -5)"/>
+<input type="button" value="v" onclick="moveMap(0, 5)"/>
+</p>
+<p>
+X: <input type="text" id="testX" size="5"/>
+Y: <input type="text" id="testY" size="5"/>
+scale: <input type="text" id="scale" size="5"/>
+<input type="button" value="Test" onclick="test()"/>
+<input type="button" value="unTest" onclick="untest()"/>
+</body>
+</html>
+

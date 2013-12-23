@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+
+<!--
+Copyright 2013 J David Eisenberg
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIN, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+-->
+
+<html xml:lang="en" lang="en"
+    xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <title>Spontaneous Travel Helper</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <link rel="stylesheet" href="jquery-ui-1.10.3.custom/css/ui-lightness/jquery-ui-1.10.3.custom.css"/>
+  <link rel="stylesheet" href="data_tables.css"/>
+  <style type="text/css">
+  body {font-family: Helvetica, Arial, sans-serif}
+  .centered {text-align:center}
+  #regions ul {list-style-type: none;}
+  .bigButton {
+   display: inline-block;
+   background-color: #009900;
+   color: white;
+   font-size: 18pt;
+   padding: 0.5em;
+   text-align:center;
+   border-radius: 0.5em;
+  }
+  .foldButton {
+    display: inline-block;
+    background-color: #ccc;
+    color: black;
+    border: 1px solid #999;
+    padding: 0.1em;
+    border-radius: 0.2em;
+    cursor: pointer;
+  }
+  a.extlink:after {
+    content: url("external_link.png")
+  }
+  </style>
+  <script src="jquery-ui-1.10.3.custom/js/jquery-1.9.1.js"></script>
+  <script src="jquery-ui-1.10.3.custom/js/jquery-ui-1.10.3.custom.min.js"></script>
+  <script src="jquery.dataTables.min.js"></script>
+  <script type="text/javascript" src="regions.js"></script>
+  <script type="text/javascript" src="cities.js"></script>
+  <script type="text/javascript" src="usa_visa.js"></script>
+  <script type="text/javascript">
+    function initialize()
+    {
+      $("#cityListTable").dataTable( 
+        {
+        "sScrollY" : "200",
+        "bPaginate": false,
+        }
+        );
+      /*
+      $("#cityListTable").dataTable({
+        "sScrollY": "200px",
+        "bPaginate": false,
+    } );
+    */
+    }
+  </script>  
+</head>
+
+<body onload="initialize()">
+
+<table class="display" id="cityListTable" style="width: 800px"> <!--  style="margin: 0 auto" -->
+<thead>
+	<tr>
+	<th>City</th>
+  <th>Country</th>
+  <th>Population</th>
+	</tr>
+</thead>
+<tfoot>
+	<tr>
+	<th>City</th>
+  <th>Country</th>
+  <th>Population</th>
+	</tr>
+</tfoot>
+<tbody>
+  <tr>
+  <td>test</td><td>US</td><td>1234</td>
+  </tr>
+  <tr>
+  <td>test2</td><td>US</td><td>1234</td>
+  </tr>
+</tbody>
+</table>
+
+<hr />
+<p class="centered">
+<a href="about.html">About this page / Credits</a>
+</p>
+</body>
+</html>

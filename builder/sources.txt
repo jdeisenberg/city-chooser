@@ -1,0 +1,13 @@
+http://unstats.un.org/unsd/demographic/products/dyb/dyb2011/Table08.xls
+
+World map: http://en.wikipedia.org/wiki/File:Worldmap_location_NED_50m.svg
+(Public domain)
+
+three-letter country codes: http://unstats.un.org/unsd/methods/m49/m49alpha.htm
+
+http://download.maxmind.com/download/geoip/database/LICENSE_WC.txt
+
+All advertising materials and documentation mentioning features or use of
+this database must display the following acknowledgment:
+"This product includes data created by MaxMind, available from
+http://www.maxmind.com/"
