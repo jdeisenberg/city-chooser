@@ -85,14 +85,14 @@ Copyright 2013 J David Eisenberg
     var mapYOffset;
     
     /*
-    	How far can the (0, 0) be moved?
+      How far can the (0, 0) be moved?
     */
     var xOffsetLimit;
     var yOffsetLimit;
     
     /*
-    	Repeat mouse movement when mouse is held down over
-    	an arrow button
+      Repeat mouse movement when mouse is held down over
+      an arrow button
     */
     var arrowInterval;
     var mapScale;
@@ -104,31 +104,81 @@ Copyright 2013 J David Eisenberg
     var finalBoard = new Array(MAX_FLIPBOARD);
     
     var showRandom = true; // show random choice or candidate list?
+    
+    /*
+    Utility routine for debugging
+    */
+    function pointStr(x, y)
+    {
+      return(x + ", " + y);
+    }
+    
+    /*
+    Utility routine for debugging
+    */
+    function debug(msg)
+    {
+      // console.log(msg);
+    }
 
+    /*
+      Given a point (on the original map) that you want
+      to be in the center of the map, calculate the
+      offset X and Y for moving the scaled map.
+      
+      Returns an array with the offset coordinates
+    */
+    function calculateOffsets(pX, pY)
+    {
+      var offsetX = (worldMapWidth/2) / mapScale - pX;
+      var offsetY = (worldMapHeight/2) / mapScale - pY;
+      
+      debug("In offsets point = " + pointStr(pX, pY));
+      debug("In offsets: scale = " + mapScale);
+      debug("In offsets: " + pointStr(offsetX, offsetY));
+      
+      offsetX = Math.min(Math.max(offsetX, -worldMapWidth / mapScale), 0);
+      offsetY = Math.min(Math.max(offsetY, -worldMapHeight / mapScale), 0);
+      debug("In offsets after limit check: " + pointStr(offsetX, offsetY));
+      return([offsetX, offsetY]);
+    }
+    
+    /*
+      Given the offset coordinates, figure out where the center of
+      map's coordinate in unscaled coordinates. Returns an array
+      with the coordinates.
+    */
+    function calculateCoords(oX, oY)
+    {
+      var px = (worldMapWidth / 2) / mapScale - mapXOffset;
+      var py = (worldMapHeight / 2) / mapScale - mapYOffset;
+      return([px, py]);
+    }
+    
     function startMove(dX, dY)
     {
-    	if (arrowInterval)
-    	{
-    		clearInterval(arrowInterval);
-    	}
-    	moveMap(dX, dY);
-    	arrowInterval = setInterval('moveMap(' +
-    		dX + ',' + dY + ')', 100);
+      if (arrowInterval)
+      {
+        clearInterval(arrowInterval);
+      }
+      moveMap(dX, dY);
+      arrowInterval = setInterval('moveMap(' +
+        dX + ',' + dY + ')', 100);
     }
     
     function moveMap(dX, dY)
-		{
-			mapXOffset = Math.min(
-				Math.max(mapXOffset + dX * 0.1 * xOffsetLimit, xOffsetLimit),
-				0);
-			mapYOffset = Math.min(
-				Math.max(mapYOffset + dY * 0.1 * yOffsetLimit, yOffsetLimit),
-				0);
-			worldRef.setAttribute("x", mapXOffset);
-			worldRef.setAttribute("y", mapYOffset);
-    	console.log("scale=" + mapScale + " xoff = " + mapXOffset + " yoff = " + mapYOffset);
-		}
-		
+    {
+      mapXOffset = Math.min(
+        Math.max(mapXOffset + dX * 0.1 * xOffsetLimit, xOffsetLimit),
+        0);
+      mapYOffset = Math.min(
+        Math.max(mapYOffset + dY * 0.1 * yOffsetLimit, yOffsetLimit),
+        0);
+      debug("MoveMap offsets now: " + pointStr(mapXOffset, mapYOffset));
+      worldRef.setAttribute("x", mapXOffset);
+      worldRef.setAttribute("y", mapYOffset);
+    }
+    
     /*
       Add delta to current scale factor, constrain
       between 0.5 and 3.0
@@ -136,45 +186,54 @@ Copyright 2013 J David Eisenberg
    */
     function zoom(delta)
     {
+      var x;
+      var y;
+      var info;
+      
+      /* Figure out where center of image corresponds to */
+      info = calculateCoords(mapXOffset, mapYOffset);
+      x = info[0];
+      y = info[1];
+      debug("----Entering zoom---");
+      debug("Current center point: " + pointStr(x, y));
+      debug("Current offset: " + pointStr(mapXOffset, mapYOffset));
+      
       var newScale;
       if (delta == 0)
       {
-        mapScale = 0.5;
+        mapScale = 1;
         mapXOffset = 0;
         mapYOffset = 0;
       }
       else
       {
         newScale = mapScale + delta;
-        if (newScale < 0.5)
+        if (newScale < 1)
         {
-          newScale = 0.5;
+          newScale = 1;
         }
-        else if (newScale > 3.0)
+        else if (newScale > 4.0)
         {
-          newScale = 3.0;
+          newScale = 4.0;
         }
         mapScale = newScale;
         
-        xOffsetLimit = -(worldMapWidth * (2 * mapScale - 1) / mapScale);
-        yOffsetLimit = -(worldMapHeight * (2 * mapScale - 1) /
-        	mapScale);
-       	/*
-       	xOffsetLimit = -(worldMapWidth * 0.5 / mapScale);
-       	yOffsetLimit = -(worldMapHeight * 0.5 / mapScale);
-       	*/
-        mapXOffset = xOffsetLimit / 2;
-        mapYOffset = yOffsetLimit / 2;
-        mapYMax = worldMapHeight * mapScale;
+        /*
+          Now figure out the new offsets to keep
+          center point in the center, if possible
+        */
+        info = calculateOffsets(x, y);
+        mapXOffset = info[0];
+        mapYOffset = info[1];
+        debug("New offset: " + pointStr(mapXOffset, mapYOffset));
+        
+        
+        xOffsetLimit = -(worldMapWidth * (mapScale - 1) / mapScale);
+        yOffsetLimit = -(worldMapHeight * (mapScale - 1) / mapScale);
+        debug("New limits: " + pointStr(xOffsetLimit, yOffsetLimit));
       }
-      /*
-      worldRef.setAttribute("transform",
-      	"translate(" + mapXOffset + " " + mapYOffset + ") " +
-      	"scale(" + mapScale + ")"
-      	);
-      */
       worldRef.setAttribute("transform", "scale(" +
-      	mapScale + ")");
+        mapScale + ")");
       worldRef.setAttribute("x", mapXOffset);
       worldRef.setAttribute("y", mapYOffset);
       showCityLocation(chosenCity);
@@ -264,7 +323,7 @@ Copyright 2013 J David Eisenberg
         var info = cityCandidates[cityIndex];      
         x = (525 + worldMapWidth * (info[4] / 180));
         y = (worldMapHeight - worldMapHeight * (info[3] / 90));
-        r = 6 / (mapScale / 0.5);
+        r = 6 / mapScale;
       }
       else
       {
@@ -645,8 +704,8 @@ Copyright 2013 J David Eisenberg
       mapXOffset = 0;
       mapYOffset = 0;
       xOffsetLimit = 0;
-      yOffsetLimt = 0;
-      mapScale = 0.5;
+      yOffsetLimit = 0;
+      mapScale = 1;
 
      
       /*
@@ -941,12 +1000,12 @@ Copyright 2013 J David Eisenberg
 </div> <!-- floating -->
 
 <div style="float:right; width:560px; padding: 0 0 0 0.5em">
-		<object id="worldMap" data="world_map.svg" type="image/svg+xml"
-		width="551" height="277">
+    <object id="worldMap" data="world_map.svg" type="image/svg+xml"
+    width="551" height="277">
   </object>
   <p class="centered">
     <img src="zoom-out.png" width="24" height="24" alt="Zoom out"
-    	title="Zoom out" class="vcenter"
+      title="Zoom out" class="vcenter"
       onclick="zoom(-0.25)"/>
     <img src="no-zoom.png" width="24" height="24" alt="Normal size" title="Normal size"  class="vcenter"
       onclick="zoom(0)"/>
@@ -954,7 +1013,7 @@ Copyright 2013 J David Eisenberg
       onclick="zoom(0.25)"/>
     &nbsp; &nbsp;
     <img src="arrows.png" width="80" height="65" alt="Arrows"
-    	usemap="#arrowMap"  class="vcenter"/>
+      usemap="#arrowMap"  class="vcenter"/>
   </p>
   <p class="centered">Number of cities: <span id="cityCount">0</span></p>
   <div id="population"></div>
@@ -1004,11 +1063,11 @@ Copyright 2013 J David Eisenberg
 <div id="listDiv">
 <table class="display" id="cityListTable"> <!--  style="margin: 0 auto" -->
 <thead>
-	<tr>
-	<th>City</th>
+  <tr>
+  <th>City</th>
   <th>Country</th>
   <th>Population</th>
-	</tr>
+  </tr>
 </thead>
 <tbody id="listBody">
 </tbody>
@@ -1029,20 +1088,20 @@ Copyright 2013 J David Eisenberg
 <!-- #$VERSION:2.3 -->
 <!-- #$AUTHOR:J David Eisenberg -->
 <area shape="circle" coords="39,13,14" alt="up" title="Up"
-	href="#"
-	onmousedown="startMove(0, -1)"	onmouseup="clearInterval(arrowInterval)"/>
+  href="#"
+  onmousedown="startMove(0, -1)"  onmouseup="clearInterval(arrowInterval)"/>
 <area shape="circle" coords="65,32,13" alt="Right" title="Right" 
-	href="#"
-	onmousedown="startMove(1,0)"
-	onmouseup="clearInterval(arrowInterval)"/>
+  href="#"
+  onmousedown="startMove(1,0)"
+  onmouseup="clearInterval(arrowInterval)"/>
 <area shape="circle" coords="39,51,15" alt="Down" title="Down"
-	href="#"
-	onmousedown="startMove(0,1)"
-	onmouseup="clearInterval(arrowInterval)" />
+  href="#"
+  onmousedown="startMove(0,1)"
+  onmouseup="clearInterval(arrowInterval)" />
 <area shape="circle" coords="13,32,15" alt="Left" title="Left"
-	href="#"
-	onmousedown="startMove(-1,0)"
-	onmouseup="clearInterval(arrowInterval)"/>
+  href="#"
+  onmousedown="startMove(-1,0)"
+  onmouseup="clearInterval(arrowInterval)"/>
 </map>
 
 </body>

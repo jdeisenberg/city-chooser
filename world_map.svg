@@ -125,7 +125,7 @@ circle.highlight{
  */
 </style>
 <defs>
-<g id="theWorld">
+<g id="theWorld" transform="scale(0.5)">
   <g
      id="gSeaBase">
     <path
@@ -11502,12 +11502,10 @@ circle.highlight{
     style="fill:red; stroke:none"/>
 </g>
 </defs>
-	<use xlink:href="#theWorld" x="0" y="0" transform="scale(0.5)"
+	<use xlink:href="#theWorld" x="0" y="0" transform="scale(1)"
 		id="worldRef"/>
-	<!--
 	<line style="stroke:#999" x1="275.75" y1="0" x2="275.75" y2="276.5"/>
 	<line style="stroke:#999" x1="0" y1="138.25" x2="551.5" y2="138.25"/>
-	-->
 <!-- 
 	Generated using the Perl SVG Module V2.52
 	by Ronan Oger
