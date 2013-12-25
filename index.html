@@ -751,8 +751,13 @@ Copyright 2013 J David Eisenberg
               "sClass": "left"
             },
             { "aTargets": [2],
+              "sType": "numeric",
               "mRender": function(data, type, row) {
-                return insertCommas(data);
+                if (type === 'display') {
+                  return insertCommas(data);
+                } else {
+                  return data;
+                }
               },
               "sWidth": "60px",
               "sClass": "right"
